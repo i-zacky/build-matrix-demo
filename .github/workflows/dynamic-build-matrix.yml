@@ -1,0 +1,63 @@
+name: 'Dynamic Build Matrix Actions'
+
+on:
+  workflow_dispatch:
+    inputs:
+      zeus:
+        description: 'zeus'
+        type: boolean
+        required: true
+        default: false
+      athena:
+        description: 'athena'
+        type: boolean
+        required: true
+        default: false
+      hades:
+        description: 'hades'
+        type: boolean
+        required: true
+        default: false
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    outputs:
+      targets: ${{ steps.build-matrix.outputs.targets }}
+    steps:
+      - name: Setup Dynamic Build Matrix
+        id: build-matrix
+        run: |
+          TARGETS=()
+
+          if [ "${{ github.event.inputs.zeus }}" = "true" ]; then
+            TARGETS+=("zeus")
+          fi
+          if [ "${{ github.event.inputs.athena }}" = "true" ]; then
+            TARGETS+=("athena")
+          fi
+          if [ "${{ github.event.inputs.hades }}" = "true" ]; then
+            TARGETS+=("hades")
+          fi
+
+          targets=$(printf '%s\n' "${TARGETS[@]}" | jq -R . | jq -s -c .)
+          echo "::set-output name=targets::$targets"
+
+  execute:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs:
+      - setup
+    strategy:
+      fail-fast: true
+      max-parallel: 3
+      matrix:
+        targets: ${{ fromJSON(needs.setup.outputs.targets) }}
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install Figlet
+        run: sudo apt-get install -y figlet
+      - name: Execute Script
+        working-directory: scripts
+        run: ./${{ matrix.targets }}.sh
